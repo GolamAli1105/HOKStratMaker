@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
+import { Maximize, ZoomIn, ZoomOut, Trash2 } from 'lucide-react';
 
 const MapCanvas = ({ 
   mapImage, 
@@ -13,11 +14,12 @@ const MapCanvas = ({
   setPaths,
   saveHistory
 }) => {
-  const [scale, setScale] = useState(0.8);
+  const [scale, setScale] = useState(1.0);
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [mapSize, setMapSize] = useState({ w: 0, h: 0 });
 
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -31,6 +33,14 @@ const MapCanvas = ({
         if (canvasRef.current) {
           canvasRef.current.width = img.width;
           canvasRef.current.height = img.height;
+          setMapSize({ w: img.width, h: img.height });
+          // Auto-fit map to container
+          if (containerRef.current) {
+            const cW = containerRef.current.clientWidth;
+            const cH = containerRef.current.clientHeight;
+            const fitScale = Math.min(cW / img.width, cH / img.height) * 0.95;
+            setScale(fitScale);
+          }
           redrawCanvas();
         }
       };
@@ -76,19 +86,21 @@ const MapCanvas = ({
     setScale(newScale);
   };
 
-  const getMousePos = (e) => {
+  const getEventPos = (e) => {
     const rect = canvasRef.current.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     return {
-      x: (e.clientX - rect.left) / scale,
-      y: (e.clientY - rect.top) / scale
+      x: (clientX - rect.left) / scale,
+      y: (clientY - rect.top) / scale
     };
   };
 
-  const handleMouseDown = (e) => {
+  const startDrawing = (e) => {
     if (activeTool === 'select') return;
-    saveHistory(); // Save history BEFORE starting a new stroke
+    saveHistory();
     setIsDrawing(true);
-    const pos = getMousePos(e);
+    const pos = getEventPos(e);
     setPaths([...paths, { 
       points: [pos], 
       color: drawColor, 
@@ -97,15 +109,17 @@ const MapCanvas = ({
     }]);
   };
 
-  const handleMouseMove = (e) => {
+  const moveDrawing = (e) => {
     if (!isDrawing || activeTool === 'select') return;
-    const pos = getMousePos(e);
+    if (e.touches && e.touches.length > 1) return; // Ignore multi-touch
+    if (e.touches) e.preventDefault(); // Prevent scrolling while drawing
+    const pos = getEventPos(e);
     const lastPath = paths[paths.length - 1];
     const newLastPath = { ...lastPath, points: [...lastPath.points, pos] };
     setPaths([...paths.slice(0, -1), newLastPath]);
   };
 
-  const handleMouseUp = () => {
+  const stopDrawing = () => {
     setIsDrawing(false);
   };
 
@@ -114,17 +128,20 @@ const MapCanvas = ({
       className="map-canvas-container" 
       ref={containerRef}
       onWheel={handleWheel}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onMouseDown={startDrawing}
+      onMouseMove={moveDrawing}
+      onMouseUp={stopDrawing}
+      onMouseLeave={stopDrawing}
+      onTouchStart={startDrawing}
+      onTouchMove={moveDrawing}
+      onTouchEnd={stopDrawing}
       style={{
         width: '100%',
         height: '100%',
         overflow: 'hidden',
         cursor: activeTool === 'select' ? 'grab' : 'crosshair',
         position: 'relative',
-        background: '#050507',
+        background: '#000',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center'
@@ -145,7 +162,7 @@ const MapCanvas = ({
                 maxWidth: 'none', 
                 pointerEvents: 'none',
                 userSelect: 'none',
-                boxShadow: '0 0 50px rgba(0,0,0,0.5)',
+                boxShadow: '0 20px 80px rgba(0,0,0,0.8)',
                 display: 'block'
               }} 
             />
@@ -184,11 +201,28 @@ const MapCanvas = ({
       </motion.div>
 
       <div className="canvas-controls glass-panel">
-        <button onClick={() => { saveHistory(); setPaths([]); }} title="Clear Drawing">Clear Ink</button>
+        <button onClick={() => { saveHistory(); setPaths([]); }} title="Clear Drawing">
+          <Trash2 size={20} />
+        </button>
         <div className="control-divider" />
-        <button onClick={() => setScale(s => Math.min(s + 0.1, 3))}>+</button>
-        <button onClick={() => setScale(s => Math.max(s - 0.1, 0.2))}>-</button>
-        <button onClick={() => { x.set(0); y.set(0); setScale(0.8); }}>Reset View</button>
+        <button onClick={() => setScale(s => Math.min(s + 0.1, 3))} title="Zoom In">
+          <ZoomIn size={20} />
+        </button>
+        <button onClick={() => setScale(s => Math.max(s - 0.1, 0.2))} title="Zoom Out">
+          <ZoomOut size={20} />
+        </button>
+        <button className="reset-view-btn" onClick={() => {
+          x.set(0); y.set(0);
+          if (containerRef.current && mapSize.w) {
+            const cW = containerRef.current.clientWidth;
+            const cH = containerRef.current.clientHeight;
+            setScale(Math.min(cW / mapSize.w, cH / mapSize.h) * 0.9);
+          } else {
+            setScale(1.0);
+          }
+        }} title="Reset View">
+          <Maximize size={20} />
+        </button>
       </div>
     </div>
   );
@@ -210,11 +244,11 @@ const HeroIcon = ({ hero, mapScale, zIndex, onRemove, onMove }) => {
         position: 'absolute',
         left: hero.x,
         top: hero.y,
-        width: 48,
-        height: 48,
+        width: 54, // Slightly larger hit target
+        height: 54,
         zIndex: zIndex,
-        marginLeft: -24,
-        marginTop: -24,
+        marginLeft: -27,
+        marginTop: -27,
         pointerEvents: 'auto'
       }}
     >
@@ -230,24 +264,15 @@ const HeroIcon = ({ hero, mapScale, zIndex, onRemove, onMove }) => {
           hY.set(0);
           onMove(hero.id, { x: finalX, y: finalY });
         }}
-        onClick={(e) => {
-          if (e.shiftKey) onRemove(hero.id);
-        }}
+        onDoubleClick={() => onRemove(hero.id)}
+        // For mobile remove, we could add a long press or a small 'x' button, 
+        // but double click/tap is often enough or we can add a delete tool.
       >
         <img 
           src={`/assets/heroes/${hero.image}`}
           alt={hero.name}
           draggable="false"
           className={`hero-map-avatar ${hero.team || ''}`}
-          style={{
-            width: '100%',
-            height: '100%',
-            borderRadius: '50%',
-            border: '2px solid var(--accent-gold)',
-            boxShadow: '0 0 15px rgba(212, 175, 55, 0.6)',
-            background: '#000',
-            pointerEvents: 'none'
-          }}
         />
       </motion.div>
     </motion.div>

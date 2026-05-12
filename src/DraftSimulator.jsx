@@ -23,7 +23,7 @@ const DraftSimulator = ({ draftState, onDraftAction, onResetDraft }) => {
     if (phase === 'finished') return 'Draft Finished';
     const side = turn === 'blue' ? 'Blue' : 'Red';
     const action = phase === 'ban' ? 'Ban' : 'Pick';
-    return `${side}'s Turn to ${action}`;
+    return `${side}'s ${action}`;
   };
 
   return (
@@ -32,18 +32,18 @@ const DraftSimulator = ({ draftState, onDraftAction, onResetDraft }) => {
         <div className={`turn-indicator ${turn}`}>
           {getTurnText()}
         </div>
-        <button className="reset-btn" onClick={onResetDraft} title="Reset Draft">
+        <button className="reset-btn icon-btn" onClick={onResetDraft} title="Reset Draft">
           <RotateCcw size={16} />
         </button>
       </div>
 
       <div className="draft-board">
         <div className="draft-column blue">
-          <div className="draft-label">BLUE TEAM</div>
+          <div className="draft-label">Blue Bans</div>
           <div className="bans-row">
             {[0, 1, 2].map(i => (
               <div key={i} className="ban-slot blue">
-                {blueBans[i] ? <img src={`/assets/heroes/${blueBans[i].image}`} alt="" /> : <ShieldAlert size={16} />}
+                {blueBans[i] ? <img src={`/assets/heroes/${blueBans[i].image}`} alt="" /> : <ShieldAlert size={14} />}
               </div>
             ))}
           </div>
@@ -58,11 +58,11 @@ const DraftSimulator = ({ draftState, onDraftAction, onResetDraft }) => {
         </div>
 
         <div className="draft-column red">
-          <div className="draft-label">RED TEAM</div>
+          <div className="draft-label">Red Bans</div>
           <div className="bans-row">
             {[0, 1, 2].map(i => (
               <div key={i} className="ban-slot red">
-                {redBans[i] ? <img src={`/assets/heroes/${redBans[i].image}`} alt="" /> : <ShieldAlert size={16} />}
+                {redBans[i] ? <img src={`/assets/heroes/${redBans[i].image}`} alt="" /> : <ShieldAlert size={14} />}
               </div>
             ))}
           </div>
@@ -77,8 +77,8 @@ const DraftSimulator = ({ draftState, onDraftAction, onResetDraft }) => {
         </div>
       </div>
 
-      <div className="search-box glass-panel">
-        <Search size={16} />
+      <div className="search-box glass-panel" style={{ marginTop: '20px' }}>
+        <Search size={18} className="search-icon" />
         <input 
           type="text" 
           placeholder="Search heroes..." 

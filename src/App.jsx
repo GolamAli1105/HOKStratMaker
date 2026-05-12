@@ -12,7 +12,9 @@ import {
   RotateCcw,
   Eraser,
   Circle,
-  X
+  X,
+  Menu,
+  ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toPng } from 'html-to-image';
@@ -39,8 +41,11 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }) => (
     onClick={onClick}
     title={label}
   >
-    <Icon size={20} />
+    <div className="sidebar-item-icon">
+      <Icon size={20} />
+    </div>
     <span>{label}</span>
+    {active && <motion.div layoutId="active-pill" className="active-pill" />}
   </button>
 );
 
@@ -50,10 +55,11 @@ function App() {
   const [drawColor, setDrawColor] = useState('#3a86ff');
   const [brushSize, setBrushSize] = useState(4);
   const [mapImage, setMapImage] = useState('/assets/maps/Map.webp');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   
   // Frames & Timeline State
   const [frames, setFrames] = useState([
-    { id: 1, name: 'Frame 1', heroes: [], ink: [] }
+    { id: 1, name: 'Initial Setup', heroes: [], ink: [] }
   ]);
   const [activeFrameIndex, setActiveFrameIndex] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
@@ -88,7 +94,7 @@ function App() {
       frames: JSON.parse(JSON.stringify(frames)),
       activeFrameIndex
     };
-    setHistory([...history, snapshot]);
+    setHistory(prev => [...prev.slice(-19), snapshot]); // Keep last 20 states
   };
 
   const undo = () => {
@@ -98,7 +104,7 @@ function App() {
     setRedTeam(lastState.redTeam);
     setDraftData(lastState.draftData);
     setDraftStep(lastState.draftStep);
-    setFrames(lastState.frames || [{ id: 1, name: 'Frame 1', heroes: [], ink: [] }]);
+    setFrames(lastState.frames || [{ id: 1, name: 'Initial Setup', heroes: [], ink: [] }]);
     setActiveFrameIndex(lastState.activeFrameIndex || 0);
     setHistory(history.slice(0, -1));
   };
@@ -116,7 +122,6 @@ function App() {
       const newFrames = [...prev];
       const current = newFrames[activeFrameIndex];
       
-      // Update current frame's heroes to match roster (preserving x,y if they exist)
       current.heroes = roster.map(newH => {
         const existing = current.heroes.find(h => h.id === newH.id);
         return existing ? { ...newH, x: existing.x, y: existing.y } : { ...newH };
@@ -173,12 +178,11 @@ function App() {
     try {
       for (let i = 0; i < frames.length; i++) {
         setActiveFrameIndex(i);
-        // Wait for React to switch frame and render map
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 600)); // Slightly longer for clarity
         
         if (mapContainerRef.current) {
           const dataUrl = await toPng(mapContainerRef.current, {
-            backgroundColor: '#050507',
+            backgroundColor: '#050508',
             quality: 1,
             pixelRatio: 2
           });
@@ -206,12 +210,12 @@ function App() {
     const newHero = { 
       ...hero, 
       id: `${team}-${hero.name}-${Date.now()}`, 
-      // Blue team on far left, Red team on far right
       x: team === 'blue' ? 80 : 950, 
-      y: 80 + (teamCount * 100) // Increased spacing to 100px
+      y: 80 + (teamCount * 100)
     };
     if (team === 'blue') setBlueTeam([...blueTeam, newHero]);
     else setRedTeam([...redTeam, newHero]);
+    if (window.innerWidth < 1024) setIsMenuOpen(false); // Close menu on mobile after selection
   };
 
   const handleRemoveHero = (id, team) => {
@@ -249,9 +253,11 @@ function App() {
   };
 
   const resetDraft = () => {
-    saveToHistory();
-    setDraftData({ blueBans: [], redBans: [], bluePicks: [], redPicks: [] });
-    setDraftStep(0);
+    if (window.confirm('Reset the current draft?')) {
+      saveToHistory();
+      setDraftData({ blueBans: [], redBans: [], bluePicks: [], redPicks: [] });
+      setDraftStep(0);
+    }
   };
 
   const handleSwapTeam = (id, currentTeam) => {
@@ -271,14 +277,6 @@ function App() {
     }
   };
 
-  const handleHeroMove = (id, newPos) => {
-    // We don't save movement to history to avoid bloating, 
-    // but we could if needed for critical strategy steps.
-    setPlacedHeroes(placedHeroes.map(h => 
-      h.id === id ? { ...h, x: newPos.x, y: newPos.y } : h
-    ));
-  };
-
   const handleHeroRemove = (id) => {
     saveToHistory();
     setBlueTeam(prev => prev.filter(h => h.id !== id));
@@ -291,11 +289,13 @@ function App() {
   };
 
   const clearAll = () => {
-    if (window.confirm('Clear everything?')) {
+    if (window.confirm('Clear all heroes and drawings?')) {
       saveToHistory();
       setBlueTeam([]);
       setRedTeam([]);
-      resetDraft();
+      setDraftData({ blueBans: [], redBans: [], bluePicks: [], redPicks: [] });
+      setDraftStep(0);
+      setFrames(prev => prev.map(f => ({ ...f, heroes: [], ink: [] })));
     }
   };
 
@@ -303,28 +303,50 @@ function App() {
 
   return (
     <div className="app-container">
-      <nav className="navbar glass-panel">
+      <header className="navbar glass-panel">
         <div className="nav-left">
-          <div className="logo"><span className="logo-gold">HOK</span> Strat Maker</div>
-        </div>
-        <div className="nav-right">
-          <button className="nav-btn" onClick={undo} disabled={history.length === 0} style={{ opacity: history.length === 0 ? 0.5 : 1 }}>
-            <RotateCcw size={18} /> Undo
+          <button className="mobile-menu-btn" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
-          <button className="nav-btn" onClick={clearAll}><Plus size={18} /> Reset</button>
+          <div className="logo">
+            <span className="logo-gold">HOK</span> Strat Maker
+          </div>
+        </div>
+        
+        <div className="nav-right desktop-actions">
+          <button 
+            className="nav-btn" 
+            onClick={undo} 
+            disabled={history.length === 0}
+          >
+            <RotateCcw size={18} /> <span>Undo</span>
+          </button>
+          <button className="nav-btn" onClick={clearAll}>
+            <Plus size={18} /> <span>Reset</span>
+          </button>
           <button 
             className={`premium-button ${isExporting ? 'loading' : ''}`} 
             onClick={exportStrategy}
             disabled={isExporting}
           >
-            {isExporting ? 'Generating ZIP...' : 'Export Strategy'}
+            <Download size={18} />
+            {isExporting ? 'Exporting...' : 'Export ZIP'}
           </button>
         </div>
-      </nav>
+
+        <div className="nav-right mobile-actions">
+           <button className="icon-btn" onClick={undo} disabled={history.length === 0}>
+             <RotateCcw size={20} />
+           </button>
+           <button className="icon-btn premium" onClick={exportStrategy} disabled={isExporting}>
+             <Download size={20} />
+           </button>
+        </div>
+      </header>
 
       <div className="main-layout">
-        <aside className="sidebar glass-panel">
-          <div className="sidebar-section">
+        <aside className={`sidebar glass-panel ${isMenuOpen ? 'open' : ''}`}>
+          <div className="sidebar-tabs">
             <SidebarItem 
               icon={Trophy} 
               label="Draft" 
@@ -339,12 +361,16 @@ function App() {
             />
           </div>
           
-          <div className="sidebar-divider" />
-          
           <div className="sidebar-content">
             <AnimatePresence mode="wait">
               {activeTab === 'teams' && (
-                <motion.div key="teams" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <motion.div 
+                  key="teams" 
+                  initial={{ opacity: 0, x: -20 }} 
+                  animate={{ opacity: 1, x: 0 }} 
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.2 }}
+                >
                   <QuickSelect 
                     blueTeam={blueTeam} 
                     redTeam={redTeam} 
@@ -356,7 +382,13 @@ function App() {
               )}
               
               {activeTab === 'draft' && (
-                <motion.div key="draft" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <motion.div 
+                  key="draft" 
+                  initial={{ opacity: 0, x: -20 }} 
+                  animate={{ opacity: 1, x: 0 }} 
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.2 }}
+                >
                   <DraftSimulator 
                     draftState={{ ...draftData, phase: currentDraftStep.phase, turn: currentDraftStep.team }} 
                     onDraftAction={handleDraftAction} 
@@ -369,7 +401,79 @@ function App() {
         </aside>
 
         <main className="content-area">
-          <div className="canvas-wrapper glass-panel" ref={mapContainerRef}>
+          {/* Tools Toolbar Strip */}
+          <div className="toolbar-strip">
+            <div className="tool-main-actions">
+              <button 
+                className={`tool-btn ${activeTool === 'select' ? 'active' : ''}`} 
+                onClick={() => setActiveTool('select')}
+                title="Select Mode"
+              >
+                <MousePointer2 size={18} />
+                <span>Select</span>
+              </button>
+              <button 
+                className={`tool-btn ${activeTool === 'draw' ? 'active' : ''}`} 
+                onClick={() => setActiveTool('draw')}
+                title="Draw Mode"
+              >
+                <Pencil size={18} />
+                <span>Draw</span>
+              </button>
+              <button 
+                className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`} 
+                onClick={() => setActiveTool('eraser')}
+                title="Eraser Mode"
+              >
+                <Eraser size={18} />
+                <span>Eraser</span>
+              </button>
+            </div>
+
+            <AnimatePresence>
+              {(activeTool === 'draw' || activeTool === 'eraser') && (
+                <motion.div 
+                  className="tool-options-tray"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                >
+                  <div className="color-divider" />
+                  <div className="tray-label">Size</div>
+                  <div className="size-selector">
+                    {[4, 10, 20].map(size => (
+                      <button
+                        key={size}
+                        className={`size-btn ${brushSize === size ? 'active' : ''}`}
+                        onClick={() => setBrushSize(size)}
+                      >
+                        <div className="size-dot" style={{ width: size/1.5, height: size/1.5 }} />
+                      </button>
+                    ))}
+                  </div>
+                  {activeTool === 'draw' && (
+                    <>
+                      <div className="color-divider" />
+                      <div className="tray-label">Color</div>
+                      <div className="color-picker-tray">
+                        {['#3a86ff', '#ff3a3a', '#ffd43a', '#ffffff', '#4cc9f0'].map(color => (
+                          <button
+                            key={color}
+                            className={`color-dot ${drawColor === color ? 'active' : ''}`}
+                            style={{ backgroundColor: color }}
+                            onClick={() => setDrawColor(color)}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Map Canvas fills remaining space */}
+          <div className="canvas-wrapper" ref={mapContainerRef}>
             <MapCanvas 
               mapImage={mapImage} 
               placedHeroes={currentFrame.heroes}
@@ -378,7 +482,6 @@ function App() {
                 updateFrameData(newHeroes, null);
               }}
               onHeroRemove={(id) => {
-                saveToHistory();
                 handleHeroRemove(id);
               }}
               activeTool={activeTool}
@@ -388,118 +491,59 @@ function App() {
               setPaths={(newInk) => updateFrameData(null, newInk)}
               saveHistory={saveToHistory}
             />
-            
-            {/* Floating Tools Toolbar */}
-            <div className="floating-toolbar glass-panel">
-              <div className="tool-main-actions">
-                <button 
-                  className={`tool-btn ${activeTool === 'select' ? 'active' : ''}`} 
-                  onClick={() => setActiveTool('select')}
-                  title="Select Mode"
-                >
-                  <MousePointer2 size={20} />
-                </button>
-                <button 
-                  className={`tool-btn ${activeTool === 'draw' ? 'active' : ''}`} 
-                  onClick={() => setActiveTool('draw')}
-                  title="Draw Mode"
-                >
-                  <Pencil size={20} />
-                </button>
-                <button 
-                  className={`tool-btn ${activeTool === 'eraser' ? 'active' : ''}`} 
-                  onClick={() => setActiveTool('eraser')}
-                  title="Eraser Mode"
-                >
-                  <Eraser size={20} />
-                </button>
-              </div>
+          </div>
 
-              {(activeTool === 'draw' || activeTool === 'eraser') && (
+          {/* Timeline Strip */}
+          <div className="timeline-container">
+            <div className="timeline-scroll">
+              {frames.map((frame, index) => (
                 <motion.div 
-                  className="tool-options-tray"
-                  initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: 'auto', opacity: 1 }}
+                  key={frame.id} 
+                  className={`timeline-frame ${activeFrameIndex === index ? 'active' : ''}`}
+                  onClick={() => setActiveFrameIndex(index)}
+                  whileHover={{ y: -4, scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                 >
-                  <div className="color-divider" />
-                  
-                  {/* Size Selection */}
-                  <div className="size-selector">
-                    {[
-                      { size: 4, iconSize: 8 },
-                      { size: 10, iconSize: 14 },
-                      { size: 20, iconSize: 20 }
-                    ].map(s => (
-                      <button
-                        key={s.size}
-                        className={`size-btn ${brushSize === s.size ? 'active' : ''}`}
-                        onClick={() => setBrushSize(s.size)}
-                        title={`Size ${s.size}`}
-                      >
-                        <Circle size={s.iconSize} fill="currentColor" />
-                      </button>
-                    ))}
+                  <div className="frame-preview-box">
+                    <img src={mapImage} alt="" className="frame-mini-map" />
+                    <div className="frame-num-badge">{index + 1}</div>
+                    {frame.heroes.length > 0 && <div className="frame-content-indicator" title={`${frame.heroes.length} Heroes`} />}
                   </div>
-
-                  {activeTool === 'draw' && (
-                    <>
-                      <div className="color-divider" />
-                      <div className="color-picker-tray">
-                        {[
-                          { color: '#3a86ff', label: 'Blue' },
-                          { color: '#ff3a3a', label: 'Red' },
-                          { color: '#ffd43a', label: 'Yellow' },
-                          { color: '#ffffff', label: 'White' },
-                          { color: '#4cc9f0', label: 'Cyan' }
-                        ].map(c => (
-                          <button
-                            key={c.color}
-                            className={`color-dot ${drawColor === c.color ? 'active' : ''}`}
-                            style={{ backgroundColor: c.color }}
-                            onClick={() => setDrawColor(c.color)}
-                            title={c.label}
-                          />
-                        ))}
-                      </div>
-                    </>
+                  <input 
+                    className="frame-name-input"
+                    value={frame.name}
+                    onChange={(e) => renameFrame(index, e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  {frames.length > 1 && (
+                    <button className="frame-delete" onClick={(e) => deleteFrame(index, e)}>
+                      <X size={10} />
+                    </button>
                   )}
+                  {activeFrameIndex === index && <motion.div layoutId="frame-glow" className="frame-active-glow" />}
                 </motion.div>
-              )}
+              ))}
             </div>
-
-            {/* Timeline UI */}
-            <div className="timeline-container glass-panel">
-              <div className="timeline-scroll">
-                {frames.map((frame, index) => (
-                  <div 
-                    key={frame.id} 
-                    className={`timeline-frame ${activeFrameIndex === index ? 'active' : ''}`}
-                    onClick={() => setActiveFrameIndex(index)}
-                  >
-                    <div className="frame-preview">
-                      <div className="frame-num">{index + 1}</div>
-                    </div>
-                    <input 
-                      className="frame-name-input"
-                      value={frame.name}
-                      onChange={(e) => renameFrame(index, e.target.value)}
-                      onClick={(e) => e.stopPropagation()} // Prevent selecting frame when clicking input
-                    />
-                    {frames.length > 1 && (
-                      <button className="frame-delete" onClick={(e) => deleteFrame(index, e)}>
-                        <X size={10} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <button className="add-frame-btn" onClick={addFrame}>
-                <Plus size={16} /> Add Frame
-              </button>
-            </div>
+            <button className="add-frame-btn" onClick={addFrame}>
+              <Plus size={20} />
+              <span>Add Frame</span>
+            </button>
           </div>
         </main>
       </div>
+      
+      {/* Mobile Overlay for sidebar */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <motion.div 
+            className="mobile-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsMenuOpen(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

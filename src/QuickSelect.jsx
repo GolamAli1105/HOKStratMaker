@@ -39,7 +39,7 @@ const QuickSelect = ({ blueTeam, redTeam, onAddHero, onRemoveHero, onSwapTeam })
       </div>
 
       <div className="search-box glass-panel">
-        <Search size={16} />
+        <Search size={18} className="search-icon" />
         <input 
           type="text" 
           placeholder="Search heroes..." 
@@ -101,30 +101,34 @@ const QuickSelect = ({ blueTeam, redTeam, onAddHero, onRemoveHero, onSwapTeam })
       </div>
 
       {/* Selected Teams Summary */}
-      <div className="teams-summary">
-        <div className="summary-column">
-          <div className="summary-title blue">Blue</div>
-          <div className="summary-list">
-            {blueTeam.map(hero => (
-              <div key={hero.id} className="summary-item">
-                <img src={`/assets/heroes/${hero.image}`} alt="" />
-                <button onClick={() => onRemoveHero(hero.id, 'blue')}><X size={12} /></button>
-              </div>
-            ))}
+      {(blueTeam.length > 0 || redTeam.length > 0) && (
+        <div className="teams-summary">
+          <div className="summary-column">
+            <div className="summary-title blue">Blue Roster</div>
+            <div className="summary-list">
+              {blueTeam.map(hero => (
+                <div key={hero.id} className="summary-item">
+                  <img src={`/assets/heroes/${hero.image}`} alt="" />
+                  <button onClick={() => onRemoveHero(hero.id, 'blue')}><X size={10} /></button>
+                </div>
+              ))}
+              {blueTeam.length === 0 && <div className="slot-empty">Empty</div>}
+            </div>
+          </div>
+          <div className="summary-column">
+            <div className="summary-title red">Red Roster</div>
+            <div className="summary-list">
+              {redTeam.map(hero => (
+                <div key={hero.id} className="summary-item">
+                  <img src={`/assets/heroes/${hero.image}`} alt="" />
+                  <button onClick={() => onRemoveHero(hero.id, 'red')}><X size={10} /></button>
+                </div>
+              ))}
+              {redTeam.length === 0 && <div className="slot-empty">Empty</div>}
+            </div>
           </div>
         </div>
-        <div className="summary-column">
-          <div className="summary-title red">Red</div>
-          <div className="summary-list">
-            {redTeam.map(hero => (
-              <div key={hero.id} className="summary-item">
-                <img src={`/assets/heroes/${hero.image}`} alt="" />
-                <button onClick={() => onRemoveHero(hero.id, 'red')}><X size={12} /></button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
